@@ -1,0 +1,14 @@
+{
+    "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
+    "type": "Code",
+    "modid": "simplebedspawn",
+    "name": "Simple Bed Spawn",
+    "authors": [
+        "PalmierSama"
+    ],
+    "description": "A simple mod to allow the setting of spawn when sleeping in a bed.",
+    "version": "1.0.0",
+    "dependencies": {
+        "game": "=>1.22.0"
+    }
+}
