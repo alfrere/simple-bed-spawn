@@ -74,19 +74,22 @@ namespace SimpleBedSpawn
 
         private void OnDidBreakBlock(IServerPlayer byPlayer, int oldblockId, BlockSelection blockSel)
         {
-            sapi?.Logger.Notification("[SimpleBedSpawn] Block broken at {0}, {1}, {2}. Tracking {3} beds.",
-            blockSel.Position.X, blockSel.Position.Y, blockSel.Position.Z,
-            bedPosByPlayerUid.Count);
-
             foreach (var pair in bedPosByPlayerUid)
             {
-                if (pair.Value.Equals(blockSel.Position))
+                if (pair.Value.Equals(blockSel.Position) ||
+                pair.Value.Equals(blockSel.Position.NorthCopy()) ||
+                pair.Value.Equals(blockSel.Position.SouthCopy()) ||
+                pair.Value.Equals(blockSel.Position.EastCopy()) ||
+                pair.Value.Equals(blockSel.Position.WestCopy())
+                )
                 {
                     IServerPlayer? bedOwner = sapi?.World.PlayerByUid(pair.Key) as IServerPlayer;
                     if (bedOwner == null) continue;
 
                     bedOwner.SetSpawnPosition(null);
                     bedOwner.SendIngameError("bedspawn-lost", "Your bed was destroyed, spawn point reset.");
+                    sapi?.Logger.Notification("[SimpleBedSpawn] {0}'s bed was destroyed, spawn reset.",
+                    bedOwner.PlayerName);
                     bedPosByPlayerUid.Remove(pair.Key);
                     break;
                 }
@@ -107,11 +110,12 @@ namespace SimpleBedSpawn
             EntityPos seatPos = entity.MountedOn.SeatPosition ?? entity.Pos!;
 
             // Show when a bed position is saved in the logs
-            sapi?.Logger.Notification("[SimpleBedSpawn] Bed position saved at {0}, {1}, {2} for player {3}.",
+            sapi?.Logger.Notification("[SimpleBedSpawn] {0}'s spawn set at ({1}, {2}, {3}).",
+            player.PlayerName,
             (int)Math.Floor(seatPos.X),
-            (int)Math.Ceiling(seatPos.InternalY),
-            (int)Math.Floor(seatPos.Z),
-            player.PlayerName);
+            (int)Math.Floor(seatPos.InternalY),
+            (int)Math.Floor(seatPos.Z)
+            );
 
             // Set the player's personal spawn point
             player.SetSpawnPosition(new PlayerSpawnPos
