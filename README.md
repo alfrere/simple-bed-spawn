@@ -1,11 +1,11 @@
 ![Vintage Story](https://img.shields.io/badge/Vintage%20Story-1.22.x-green)
-![Mod version](https://img.shields.io/badge/Mod%20Version-1.0.0-blue)
+![Mod version](https://img.shields.io/badge/Mod%20Version-1.1.0-blue)
 
 # Simple Bed Spawn
 
 A simple Vintage Story mod that sets your spawn point when you sleep in a bed.
 
-Beware, sleeping in a new bed will move the spawnpoint!
+Beware, sleeping in a new bed or destroying it will move the spawnpoint!
 
 ## Installation
 
@@ -18,7 +18,7 @@ Drop `SimpleBedSpawn.zip` into your `Mods/` folder.
 
 ## To Do
 
-- Remove the spawnpoint if the player's bed is destroyed, reverting to the world's default spawn.
+- ~~Remove the spawnpoint if the player's bed is destroyed, reverting to the world's default spawn.~~
 
 ## Source
 
