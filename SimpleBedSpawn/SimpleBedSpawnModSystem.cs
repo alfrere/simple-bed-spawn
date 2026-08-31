@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Datastructures;
+using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
 namespace SimpleBedSpawn
@@ -18,6 +19,7 @@ namespace SimpleBedSpawn
 
         // Track the registered WatchedAttribute listeners per player so we can clean up
         private readonly Dictionary<string, Action> mountListenersByPlayerUid = new();
+        private readonly Dictionary<string, BlockPos> bedPosByPlayerUid = new();
 
         public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Server;
 
@@ -27,6 +29,7 @@ namespace SimpleBedSpawn
 
             api.Event.PlayerNowPlaying += OnPlayerNowPlaying;
             api.Event.PlayerDisconnect += OnPlayerDisconnect;
+            api.Event.DidBreakBlock += OnDidBreakBlock;
         }
 
         // Called when a player joins the server
@@ -69,6 +72,27 @@ namespace SimpleBedSpawn
             mountListenersByPlayerUid.Remove(player.PlayerUID);
         }
 
+        private void OnDidBreakBlock(IServerPlayer byPlayer, int oldblockId, BlockSelection blockSel)
+        {
+            sapi?.Logger.Notification("[SimpleBedSpawn] Block broken at {0}, {1}, {2}. Tracking {3} beds.",
+            blockSel.Position.X, blockSel.Position.Y, blockSel.Position.Z,
+            bedPosByPlayerUid.Count);
+
+            foreach (var pair in bedPosByPlayerUid)
+            {
+                if (pair.Value.Equals(blockSel.Position))
+                {
+                    IServerPlayer? bedOwner = sapi?.World.PlayerByUid(pair.Key) as IServerPlayer;
+                    if (bedOwner == null) continue;
+
+                    bedOwner.SetSpawnPosition(null);
+                    bedOwner.SendIngameError("bedspawn-lost", "Your bed was destroyed, spawn point reset.");
+                    bedPosByPlayerUid.Remove(pair.Key);
+                    break;
+                }
+            }
+        }
+
         private void TrySetSpawnFromSleep(string playerUid)
         {
             IServerPlayer? player = sapi?.World.PlayerByUid(playerUid) as IServerPlayer;
@@ -81,6 +105,13 @@ namespace SimpleBedSpawn
 
             // Grab the position of the seat (the bed the player is lying in)
             EntityPos seatPos = entity.MountedOn.SeatPosition ?? entity.Pos!;
+
+            // Show when a bed position is saved in the logs
+            sapi?.Logger.Notification("[SimpleBedSpawn] Bed position saved at {0}, {1}, {2} for player {3}.",
+            (int)Math.Floor(seatPos.X),
+            (int)Math.Ceiling(seatPos.InternalY),
+            (int)Math.Floor(seatPos.Z),
+            player.PlayerName);
 
             // Set the player's personal spawn point
             player.SetSpawnPosition(new PlayerSpawnPos
@@ -96,6 +127,12 @@ namespace SimpleBedSpawn
 
             // Notify the player
             player.SendIngameError("bedspawn-set", "Spawn point set to this bed.");
+
+            bedPosByPlayerUid[player.PlayerUID] = new BlockPos(
+                (int)Math.Floor(seatPos.X),
+                (int)Math.Floor(seatPos.InternalY),
+                (int)Math.Floor(seatPos.Z)
+            );
 
             sapi.Logger.Debug(
                 "[BedSpawnMod] Spawn set for {0} at ({1}, {2}, {3})",
@@ -121,6 +158,7 @@ namespace SimpleBedSpawn
             {
                 sapi.Event.PlayerNowPlaying  -= OnPlayerNowPlaying;
                 sapi.Event.PlayerDisconnect  -= OnPlayerDisconnect;
+                sapi.Event.DidBreakBlock -= OnDidBreakBlock;
 
                 // Unregister all listeners
                 foreach (IPlayer p in sapi.World.AllOnlinePlayers)
@@ -130,6 +168,7 @@ namespace SimpleBedSpawn
             }
 
             mountListenersByPlayerUid.Clear();
+            bedPosByPlayerUid.Clear();
             base.Dispose();
         }
 
