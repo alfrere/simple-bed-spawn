@@ -1,5 +1,5 @@
 ![Vintage Story](https://img.shields.io/badge/Vintage%20Story-1.22.x-green)
-![Mod version](https://img.shields.io/badge/Mod%20Version-1.1.0-blue)
+![Mod version](https://img.shields.io/badge/Mod%20Version-1.1.1-blue)
 
 # Simple Bed Spawn
 
@@ -9,17 +9,14 @@ Beware, sleeping in a new bed or destroying it will move the spawnpoint!
 
 ## Installation
 
-Drop `SimpleBedSpawn.zip` into your `Mods/` folder.
+Drop `SimpleBedSpawn_v1.*.*.zip` into your `Mods/` folder.
 
 ## Compatibility
 
 - Vintage Story 1.22.0 and above.
 - Should work with all vanilla beds and any modded bed using the standard seat system.
 
-## To Do
+## Multiplayer
 
-- ~~Remove the spawnpoint if the player's bed is destroyed, reverting to the world's default spawn.~~
-
-## Source
-
-Built using the Vintage Story Mod BasicTemplate. Source available on [GitHub](#).
+The mod is designed to work on multiplayer servers, but has not been tested yet.
+If you encounter any issues, please open an issue or reach out directly via Vintage Story ModDB.
