@@ -125,6 +125,8 @@ namespace SimpleBedSpawn
 
         private void OnDidBreakBlock(IServerPlayer byPlayer, int oldblockId, BlockSelection blockSel)
         {
+            var toRemove = new List<string>();
+
             foreach (var pair in bedPosByPlayerUid)
             {
                 if (pair.Value.Equals(blockSel.Position) ||
@@ -134,16 +136,26 @@ namespace SimpleBedSpawn
                 pair.Value.Equals(blockSel.Position.WestCopy())
                 )
                 {
-                    IServerPlayer? bedOwner = sapi?.World.PlayerByUid(pair.Key) as IServerPlayer;
-                    if (bedOwner == null) pendingSpawnResets.Add(pair.Key);
+                    toRemove.Add(pair.Key);
 
-                    bedOwner.SetSpawnPosition(null);
-                    bedOwner.SendIngameError("bedspawn-lost", "Your bed was destroyed, spawn point reset.");
-                    sapi?.Logger.Notification("[SimpleBedSpawn] {0}'s bed was destroyed, spawn reset.",
-                    bedOwner.PlayerName);
-                    bedPosByPlayerUid.Remove(pair.Key);
-                    break;
+                    IServerPlayer? bedOwner = sapi?.World.PlayerByUid(pair.Key) as IServerPlayer;
+                    if (bedOwner != null)
+                    {
+                        bedOwner.SetSpawnPosition(null);
+                        bedOwner.SendIngameError("bedspawn-lost", "Your bed was destroyed, spawn point reset.");
+                    }
+                    else
+                    {
+                        pendingSpawnResets.Add(pair.Key);
+                    }
+
+                    sapi?.Logger.Notification("[SimpleBedSpawn] Bed belonging to {0} was destroyed, spawn reset.", pair.Key);
                 }
+            }
+
+            foreach (var key in toRemove)
+            {
+                bedPosByPlayerUid.Remove(key);                
             }
         }
 
