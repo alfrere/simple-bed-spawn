@@ -7,7 +7,7 @@
         "PalmierSama"
     ],
     "description": "A simple mod to allow the setting of spawn when sleeping in a bed.",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "dependencies": {
         "game": "1.22.0"
     }
