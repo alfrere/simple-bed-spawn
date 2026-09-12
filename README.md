@@ -1,5 +1,5 @@
 ![Vintage Story](https://img.shields.io/badge/Vintage%20Story-1.22.x-green)
-![Mod version](https://img.shields.io/badge/Mod%20Version-1.1.1-blue)
+![Mod version](https://img.shields.io/badge/Mod%20Version-1.2.0-blue)
 
 # Simple Bed Spawn
 
@@ -10,6 +10,17 @@ Beware, sleeping in a new bed or destroying it will move the spawnpoint!
 ## Installation
 
 Drop `SimpleBedSpawn_v1.*.*.zip` into your `Mods/` folder.
+
+## Configuration
+
+On first run, the mod creates `ModConfig/SimpleBedSpawnConfig.json` in your game data folder. Options:
+
+- `Enabled` — master on/off switch for the mod (default `true`).
+- `VerboseLogging` — logs extra detail (bed positions, per-sleep events, save/load counts) to the server log (default `false`).
+- `Messages.ShowSpawnSetMessage` / `Messages.SpawnSetMessage` — whether/what to tell a player when their spawn is set.
+- `Messages.ShowSpawnLostMessage` / `Messages.SpawnLostMessage` — whether/what to tell a player when their bed is destroyed and their spawn is reset.
+
+Edit the file and restart the server (or reload the world) to apply changes.
 
 ## Compatibility
 

@@ -18,6 +18,7 @@ namespace SimpleBedSpawn
     public class SimpleBedSpawnSystem : ModSystem
     {
         private ICoreServerAPI? sapi;
+        private SimpleBedSpawnConfig config = new();
 
         // Track the registered WatchedAttribute listeners per player so we can clean up
         private readonly Dictionary<string, Action> mountListenersByPlayerUid = new();
@@ -25,11 +26,19 @@ namespace SimpleBedSpawn
         private HashSet<string> pendingSpawnResets = new();
 
         private const string SaveKey = "SimpleBedSpawn_BedPositions";
+        private const string ConfigFileName = "SimpleBedSpawnConfig.json";
         public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Server;
 
         public override void StartServerSide(ICoreServerAPI api)
         {
             sapi = api;
+            LoadConfig();
+
+            if (!config.Enabled)
+            {
+                api.Logger.Notification("[SimpleBedSpawn] Mod disabled via config, not registering any handlers.");
+                return;
+            }
 
             api.Event.SaveGameLoaded += OnSaveGameLoaded;
             api.Event.GameWorldSave += OnGameWorldSave;
@@ -38,6 +47,21 @@ namespace SimpleBedSpawn
             api.Event.PlayerNowPlaying += OnPlayerNowPlaying;
             api.Event.PlayerDisconnect += OnPlayerDisconnect;
             api.Event.DidBreakBlock += OnDidBreakBlock;
+        }
+
+        private void LoadConfig()
+        {
+            try
+            {
+                config = sapi?.LoadModConfig<SimpleBedSpawnConfig>(ConfigFileName) ?? new SimpleBedSpawnConfig();
+            }
+            catch (Exception e)
+            {
+                sapi?.Logger.Error("[SimpleBedSpawn] Failed to load {0}, falling back to defaults: {1}", ConfigFileName, e.Message);
+                config = new SimpleBedSpawnConfig();
+            }
+
+            sapi?.StoreModConfig(config, ConfigFileName);
         }
 
         private void OnShutdown()
@@ -51,10 +75,13 @@ namespace SimpleBedSpawn
             if (pendingSpawnResets.Remove(player.PlayerUID))
             {
                 player.SetSpawnPosition(null);
-                player.SendIngameError("bedspawn-lost", "Your bed was destroyed, spawn point reset.");
-                sapi?.Logger.Notification(
-                    "[SimpleBedSpawn] Applied pending spawn reset for {0}.", player.PlayerName
-                );
+                SendSpawnLostMessage(player);
+                if (config.VerboseLogging)
+                {
+                    sapi?.Logger.Notification(
+                        "[SimpleBedSpawn] Applied pending spawn reset for {0}.", player.PlayerName
+                    );
+                }
             }
 
             RegisterMountListener(player);
@@ -76,8 +103,11 @@ namespace SimpleBedSpawn
             bedPosByPlayerUid.Clear();
             foreach (var beds in saved.Beds)
                 bedPosByPlayerUid[beds.Key] = new BlockPos(beds.Value[0], beds.Value[1], beds.Value[2]);
-            
-            sapi?.Logger.Notification("[SimpleBedSpawn] Loaded {0} bed position(s).", bedPosByPlayerUid.Count);
+
+            if (config.VerboseLogging)
+            {
+                sapi?.Logger.Notification("[SimpleBedSpawn] Loaded {0} bed position(s).", bedPosByPlayerUid.Count);
+            }
         }
 
         private void OnGameWorldSave()
@@ -88,9 +118,11 @@ namespace SimpleBedSpawn
 
             sapi?.WorldManager.SaveGame.StoreData(SaveKey, SerializerUtil.Serialize(data));
 
-            // Debug log to check if the data is correclty saved
-            sapi?.Logger.Notification("[SimpleBedSpawn] Saved {0} bed(s), {1} pending reset(s).",
-            data.Beds.Count, data.PendingResets.Count);
+            if (config.VerboseLogging)
+            {
+                sapi?.Logger.Notification("[SimpleBedSpawn] Saved {0} bed(s), {1} pending reset(s).",
+                data.Beds.Count, data.PendingResets.Count);
+            }
         }
 
 
@@ -142,14 +174,17 @@ namespace SimpleBedSpawn
                     if (bedOwner != null)
                     {
                         bedOwner.SetSpawnPosition(null);
-                        bedOwner.SendIngameError("bedspawn-lost", "Your bed was destroyed, spawn point reset.");
+                        SendSpawnLostMessage(bedOwner);
                     }
                     else
                     {
                         pendingSpawnResets.Add(pair.Key);
                     }
 
-                    sapi?.Logger.Notification("[SimpleBedSpawn] Bed belonging to {0} was destroyed, spawn reset.", pair.Key);
+                    if (config.VerboseLogging)
+                    {
+                        sapi?.Logger.Notification("[SimpleBedSpawn] Bed belonging to {0} was destroyed, spawn reset.", pair.Key);
+                    }
                 }
             }
 
@@ -172,13 +207,15 @@ namespace SimpleBedSpawn
             // Grab the position of the seat (the bed the player is lying in)
             EntityPos seatPos = entity.MountedOn.SeatPosition ?? entity.Pos!;
 
-            // Show when a bed position is saved in the logs
-            sapi?.Logger.Notification("[SimpleBedSpawn] {0}'s spawn set at ({1}, {2}, {3}).",
-            player.PlayerName,
-            (int)Math.Floor(seatPos.X),
-            (int)Math.Floor(seatPos.InternalY),
-            (int)Math.Floor(seatPos.Z)
-            );
+            if (config.VerboseLogging)
+            {
+                sapi?.Logger.Notification("[SimpleBedSpawn] {0}'s spawn set at ({1}, {2}, {3}).",
+                player.PlayerName,
+                (int)Math.Floor(seatPos.X),
+                (int)Math.Floor(seatPos.InternalY),
+                (int)Math.Floor(seatPos.Z)
+                );
+            }
 
             // Set the player's personal spawn point
             player.SetSpawnPosition(new PlayerSpawnPos
@@ -192,14 +229,25 @@ namespace SimpleBedSpawn
                 RemainingUses = -1   // -1 means unlimited uses
             });
 
-            // Notify the player
-            player.SendIngameError("bedspawn-set", "Spawn point set to this bed.");
+            SendSpawnSetMessage(player);
 
             bedPosByPlayerUid[player.PlayerUID] = new BlockPos(
                 (int)Math.Floor(seatPos.X),
                 (int)Math.Floor(seatPos.InternalY),
                 (int)Math.Floor(seatPos.Z)
             );
+        }
+
+        private void SendSpawnSetMessage(IServerPlayer player)
+        {
+            if (config.Messages.ShowSpawnSetMessage)
+                player.SendIngameError("bedspawn-set", config.Messages.SpawnSetMessage);
+        }
+
+        private void SendSpawnLostMessage(IServerPlayer player)
+        {
+            if (config.Messages.ShowSpawnLostMessage)
+                player.SendIngameError("bedspawn-lost", config.Messages.SpawnLostMessage);
         }
 
         /// <summary>
