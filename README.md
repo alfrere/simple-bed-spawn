@@ -30,4 +30,4 @@ Edit the file and restart the server (or reload the world) to apply changes.
 ## Multiplayer
 
 The mod is designed to work on multiplayer servers, but has not been tested yet.
-If you encounter any issues, please open an issue or reach out directly via Vintage Story ModDB.
+If you encounter any issues, please open an issue.
