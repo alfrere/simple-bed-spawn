@@ -1,5 +1,5 @@
 ![Vintage Story](https://img.shields.io/badge/Vintage%20Story-1.22.x-green)
-![Mod version](https://img.shields.io/badge/Mod%20Version-1.2.0-blue)
+![Mod version](https://img.shields.io/badge/Mod%20Version-1.3.0-blue)
 
 # Simple Bed Spawn
 
