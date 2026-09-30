@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace SimpleBedSpawn
 {
     public class SimpleBedSpawnConfig
@@ -13,6 +15,12 @@ namespace SimpleBedSpawn
         /// </summary>
         public bool VerboseLogging { get; set; } = false;
 
+        /// <summary>
+        /// Block codes of beds allowed to set the spawn point. Wildcards are supported,
+        /// e.g. "game:bed-woodaged-*" or "game:bed-hay-*". Leave empty to allow every bed.
+        /// </summary>
+        public List<string> BedWhitelist { get; set; } = new();
+
         public MessagesConfig Messages { get; set; } = new();
     }
 
@@ -23,5 +31,8 @@ namespace SimpleBedSpawn
 
         public bool ShowSpawnLostMessage { get; set; } = true;
         public string SpawnLostMessage { get; set; } = "Your bed was destroyed, spawn point reset.";
+
+        public bool ShowBedNotAllowedMessage { get; set; } = true;
+        public string BedNotAllowedMessage { get; set; } = "This bed can't be used as a spawn point.";
     }
 }

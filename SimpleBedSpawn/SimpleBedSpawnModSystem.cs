@@ -207,6 +207,26 @@ namespace SimpleBedSpawn
             // Grab the position of the seat (the bed the player is lying in)
             EntityPos seatPos = entity.MountedOn.SeatPosition ?? entity.Pos!;
 
+            BlockPos bedPos = new BlockPos(
+                (int)Math.Floor(seatPos.X),
+                (int)Math.Floor(seatPos.InternalY),
+                (int)Math.Floor(seatPos.Z)
+            );
+
+            // Prefer the bed's own block entity, fall back to the block at the seat position
+            Block? bedBlock = (entity.MountedOn as BlockEntity)?.Block ?? sapi?.World.BlockAccessor.GetBlock(bedPos);
+
+            if (!IsBedAllowed(bedBlock))
+            {
+                if (config.VerboseLogging)
+                {
+                    sapi?.Logger.Notification("[SimpleBedSpawn] {0} slept in non-whitelisted bed {1}, spawn not set.",
+                    player.PlayerName, bedBlock?.Code?.ToString() ?? "unknown");
+                }
+                SendBedNotAllowedMessage(player);
+                return;
+            }
+
             if (config.VerboseLogging)
             {
                 sapi?.Logger.Notification("[SimpleBedSpawn] {0}'s spawn set at ({1}, {2}, {3}).",
@@ -231,11 +251,22 @@ namespace SimpleBedSpawn
 
             SendSpawnSetMessage(player);
 
-            bedPosByPlayerUid[player.PlayerUID] = new BlockPos(
-                (int)Math.Floor(seatPos.X),
-                (int)Math.Floor(seatPos.InternalY),
-                (int)Math.Floor(seatPos.Z)
-            );
+            bedPosByPlayerUid[player.PlayerUID] = bedPos;
+        }
+
+        /// <summary>
+        /// Returns true if the bed may set the spawn point. An empty whitelist allows every bed.
+        /// </summary>
+        private bool IsBedAllowed(Block? bedBlock)
+        {
+            if (config.BedWhitelist.Count == 0) return true;
+            if (bedBlock?.Code == null) return false;
+
+            foreach (string pattern in config.BedWhitelist)
+            {
+                if (WildcardUtil.Match(new AssetLocation(pattern), bedBlock.Code)) return true;
+            }
+            return false;
         }
 
         private void SendSpawnSetMessage(IServerPlayer player)
@@ -248,6 +279,12 @@ namespace SimpleBedSpawn
         {
             if (config.Messages.ShowSpawnLostMessage)
                 player.SendIngameError("bedspawn-lost", config.Messages.SpawnLostMessage);
+        }
+
+        private void SendBedNotAllowedMessage(IServerPlayer player)
+        {
+            if (config.Messages.ShowBedNotAllowedMessage)
+                player.SendIngameError("bedspawn-notallowed", config.Messages.BedNotAllowedMessage);
         }
 
         /// <summary>

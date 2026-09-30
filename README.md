@@ -17,8 +17,10 @@ On first run, the mod creates `ModConfig/SimpleBedSpawnConfig.json` in your game
 
 - `Enabled` — master on/off switch for the mod (default `true`).
 - `VerboseLogging` — logs extra detail (bed positions, per-sleep events, save/load counts) to the server log (default `false`).
+- `BedWhitelist` — list of bed block codes allowed to set the spawn point (default empty = every bed is allowed). Wildcards are supported. Vanilla beds are `game:bed-{wood|hay|woodaged|village}-*`, e.g. `["game:bed-woodaged-*", "game:bed-village-*"]` disables spawn setting for wood and hay beds.
 - `Messages.ShowSpawnSetMessage` / `Messages.SpawnSetMessage` — whether/what to tell a player when their spawn is set.
 - `Messages.ShowSpawnLostMessage` / `Messages.SpawnLostMessage` — whether/what to tell a player when their bed is destroyed and their spawn is reset.
+- `Messages.ShowBedNotAllowedMessage` / `Messages.BedNotAllowedMessage` — whether/what to tell a player who sleeps in a bed that isn't whitelisted.
 
 Edit the file and restart the server (or reload the world) to apply changes.
 
