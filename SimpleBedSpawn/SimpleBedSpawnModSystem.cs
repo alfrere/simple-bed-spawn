@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using HarmonyLib;
 using ProtoBuf;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -17,7 +18,9 @@ namespace SimpleBedSpawn
 
     public class SimpleBedSpawnSystem : ModSystem
     {
+        private static SimpleBedSpawnSystem? instance;
         private ICoreServerAPI? sapi;
+        private Harmony? harmony;
         private SimpleBedSpawnConfig config = new();
 
         // Track the registered WatchedAttribute listeners per player so we can clean up
@@ -46,7 +49,13 @@ namespace SimpleBedSpawn
 
             api.Event.PlayerNowPlaying += OnPlayerNowPlaying;
             api.Event.PlayerDisconnect += OnPlayerDisconnect;
-            api.Event.DidBreakBlock += OnDidBreakBlock;
+
+            instance = this;
+            harmony = new Harmony(Mod.Info.ModID);
+            harmony.Patch(
+                AccessTools.Method(typeof(BlockEntity), nameof(BlockEntity.OnBlockRemoved)),
+                postfix: new HarmonyMethod(typeof(SimpleBedSpawnSystem), nameof(OnBlockEntityRemovedPostfix))
+            );
         }
 
         private void LoadConfig()
@@ -155,17 +164,27 @@ namespace SimpleBedSpawn
             mountListenersByPlayerUid.Remove(player.PlayerUID);
         }
 
-        private void OnDidBreakBlock(IServerPlayer byPlayer, int oldblockId, BlockSelection blockSel)
+        // Harmony postfix on BlockEntity.OnBlockRemoved. Runs for every removal cause
+        // (player break, explosion, world edit, other mods), unlike DidBreakBlock which only fires for players.
+        private static void OnBlockEntityRemovedPostfix(BlockEntity __instance)
+        {
+            // The patch is process-wide, so in singleplayer it also runs for client-side block entities
+            if (__instance is not IMountableSeat || __instance.Api?.Side != EnumAppSide.Server) return;
+
+            instance?.OnBedRemoved(__instance.Pos);
+        }
+
+        private void OnBedRemoved(BlockPos removedPos)
         {
             var toRemove = new List<string>();
 
             foreach (var pair in bedPosByPlayerUid)
             {
-                if (pair.Value.Equals(blockSel.Position) ||
-                pair.Value.Equals(blockSel.Position.NorthCopy()) ||
-                pair.Value.Equals(blockSel.Position.SouthCopy()) ||
-                pair.Value.Equals(blockSel.Position.EastCopy()) ||
-                pair.Value.Equals(blockSel.Position.WestCopy())
+                if (pair.Value.Equals(removedPos) ||
+                pair.Value.Equals(removedPos.NorthCopy()) ||
+                pair.Value.Equals(removedPos.SouthCopy()) ||
+                pair.Value.Equals(removedPos.EastCopy()) ||
+                pair.Value.Equals(removedPos.WestCopy())
                 )
                 {
                     toRemove.Add(pair.Key);
@@ -305,7 +324,6 @@ namespace SimpleBedSpawn
 
                 sapi.Event.PlayerNowPlaying -= OnPlayerNowPlaying;
                 sapi.Event.PlayerDisconnect -= OnPlayerDisconnect;
-                sapi.Event.DidBreakBlock -= OnDidBreakBlock;
 
                 // Unregister all listeners
                 foreach (IPlayer p in sapi.World.AllOnlinePlayers)
@@ -313,6 +331,9 @@ namespace SimpleBedSpawn
                     if (p is IServerPlayer sp) UnregisterPlayer(sp);
                 }
             }
+
+            harmony?.UnpatchAll(harmony.Id);
+            instance = null;
 
             mountListenersByPlayerUid.Clear();
             bedPosByPlayerUid.Clear();
