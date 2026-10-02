@@ -27,6 +27,13 @@ namespace SimpleBedSpawn
         /// </summary>
         public bool AllowSharedBeds { get; set; } = true;
 
+        /// <summary>
+        /// Real time a player must wait after setting their spawn before they can set it on a different bed.
+        /// Format: "minutes", "minutes:seconds" or "hours:minutes:seconds", e.g. "10", "10:30", "1:30:00".
+        /// Sleeping again in their current spawn bed is never blocked. "0" disables it.
+        /// </summary>
+        public string SetSpawnCooldown { get; set; } = "0";
+
         public MessagesConfig Messages { get; set; } = new();
     }
 
@@ -43,5 +50,9 @@ namespace SimpleBedSpawn
 
         public bool ShowBedTakenMessage { get; set; } = true;
         public string BedTakenMessage { get; set; } = "This bed is already someone else's spawn point.";
+
+        public bool ShowCooldownMessage { get; set; } = true;
+        /// <summary>{0} is replaced by the remaining time, e.g. "18 seconds" or "10 minutes 30 seconds".</summary>
+        public string CooldownMessage { get; set; } = "You can change your spawn bed again in {0}.";
     }
 }

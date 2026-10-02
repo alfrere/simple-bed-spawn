@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using HarmonyLib;
 using ProtoBuf;
 using Vintagestory.API.Common;
@@ -22,11 +23,15 @@ namespace SimpleBedSpawn
         private ICoreServerAPI? sapi;
         private Harmony? harmony;
         private SimpleBedSpawnConfig config = new();
+        // Parsed from config.SetSpawnCooldown
+        private TimeSpan spawnCooldown = TimeSpan.Zero;
 
         // Track the registered WatchedAttribute listeners per player so we can clean up
         private readonly Dictionary<string, Action> mountListenersByPlayerUid = new();
         private Dictionary<string, BlockPos> bedPosByPlayerUid = new();
         private HashSet<string> pendingSpawnResets = new();
+        // In memory only: a server restart clears every cooldown
+        private readonly Dictionary<string, DateTime> lastSpawnSetByPlayerUid = new();
 
         private const string SaveKey = "SimpleBedSpawn_BedPositions";
         private const string ConfigFileName = "SimpleBedSpawnConfig.json";
@@ -71,6 +76,41 @@ namespace SimpleBedSpawn
             }
 
             sapi?.StoreModConfig(config, ConfigFileName);
+
+            if (!TryParseCooldown(config.SetSpawnCooldown, out spawnCooldown))
+            {
+                sapi?.Logger.Warning("[SimpleBedSpawn] Invalid SetSpawnCooldown \"{0}\", expected \"minutes\", " +
+                    "\"minutes:seconds\" or \"hours:minutes:seconds\" (e.g. \"10:30\"). Cooldown disabled.",
+                    config.SetSpawnCooldown);
+                spawnCooldown = TimeSpan.Zero;
+            }
+        }
+
+        /// <summary>
+        /// Parses "minutes", "minutes:seconds" or "hours:minutes:seconds" into a duration.
+        /// An empty value means no cooldown.
+        /// </summary>
+        private static bool TryParseCooldown(string? value, out TimeSpan cooldown)
+        {
+            cooldown = TimeSpan.Zero;
+            if (string.IsNullOrWhiteSpace(value)) return true;
+
+            string[] parts = value.Trim().Split(':');
+            if (parts.Length > 3) return false;
+
+            var numbers = new int[parts.Length];
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (!int.TryParse(parts[i].Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out numbers[i])) return false;
+            }
+
+            cooldown = numbers.Length switch
+            {
+                1 => TimeSpan.FromMinutes(numbers[0]),
+                2 => new TimeSpan(0, numbers[0], numbers[1]),
+                _ => new TimeSpan(numbers[0], numbers[1], numbers[2])
+            };
+            return true;
         }
 
         private void OnShutdown()
@@ -210,6 +250,8 @@ namespace SimpleBedSpawn
             foreach (var key in toRemove)
             {
                 bedPosByPlayerUid.Remove(key);                
+                // Losing their bed shouldn't also lock the player out of setting a new spawn
+                lastSpawnSetByPlayerUid.Remove(key);
             }
         }
 
@@ -257,6 +299,25 @@ namespace SimpleBedSpawn
                 return;
             }
 
+            // Sleeping again in the current spawn bed is never blocked and doesn't restart the cooldown
+            bool isSameBed = bedPosByPlayerUid.TryGetValue(player.PlayerUID, out BlockPos? currentBedPos) &&
+                currentBedPos.Equals(bedPos);
+
+            if (!isSameBed)
+            {
+                TimeSpan remaining = GetRemainingCooldown(player.PlayerUID);
+                if (remaining > TimeSpan.Zero)
+                {
+                    if (config.VerboseLogging)
+                    {
+                        sapi?.Logger.Notification("[SimpleBedSpawn] {0} is on cooldown ({1} left), spawn not set.",
+                        player.PlayerName, FormatRemainingTime(remaining));
+                    }
+                    SendCooldownMessage(player, remaining);
+                    return;
+                }
+            }
+
             if (config.VerboseLogging)
             {
                 sapi?.Logger.Notification("[SimpleBedSpawn] {0}'s spawn set at ({1}, {2}, {3}).",
@@ -282,6 +343,7 @@ namespace SimpleBedSpawn
             SendSpawnSetMessage(player);
 
             bedPosByPlayerUid[player.PlayerUID] = bedPos;
+            if (!isSameBed) lastSpawnSetByPlayerUid[player.PlayerUID] = DateTime.UtcNow;
         }
 
         /// <summary>
@@ -297,6 +359,19 @@ namespace SimpleBedSpawn
                 if (WildcardUtil.Match(new AssetLocation(pattern), bedBlock.Code)) return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// Returns the real time left before the player can set their spawn on a different bed,
+        /// or zero if they can do it now.
+        /// </summary>
+        private TimeSpan GetRemainingCooldown(string playerUid)
+        {
+            if (spawnCooldown <= TimeSpan.Zero) return TimeSpan.Zero;
+            if (!lastSpawnSetByPlayerUid.TryGetValue(playerUid, out DateTime lastSet)) return TimeSpan.Zero;
+
+            TimeSpan remaining = spawnCooldown - (DateTime.UtcNow - lastSet);
+            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
         }
 
         /// <summary>
@@ -335,6 +410,38 @@ namespace SimpleBedSpawn
                 player.SendIngameError("bedspawn-taken", config.Messages.BedTakenMessage);
         }
 
+        private void SendCooldownMessage(IServerPlayer player, TimeSpan remaining)
+        {
+            if (!config.Messages.ShowCooldownMessage) return;
+
+            // Replace instead of string.Format so a stray brace in the config can't throw
+            player.SendIngameError("bedspawn-cooldown",
+                config.Messages.CooldownMessage.Replace("{0}", FormatRemainingTime(remaining)));
+        }
+
+        /// <summary>
+        /// Formats a duration with its two largest units, e.g. "18 seconds", "10 minutes 30 seconds",
+        /// "1 hour 5 minutes". Rounded up to the smallest unit shown, so it never shows 0.
+        /// </summary>
+        private static string FormatRemainingTime(TimeSpan remaining)
+        {
+            int totalSeconds = (int)Math.Ceiling(remaining.TotalSeconds);
+            if (totalSeconds < 3600)
+                return JoinUnits(totalSeconds / 60, "minute", totalSeconds % 60, "second");
+
+            int totalMinutes = (int)Math.Ceiling(totalSeconds / 60.0);
+            return JoinUnits(totalMinutes / 60, "hour", totalMinutes % 60, "minute");
+        }
+
+        private static string JoinUnits(int major, string majorUnit, int minor, string minorUnit)
+        {
+            static string Unit(int n, string unit) => n == 1 ? $"1 {unit}" : $"{n} {unit}s";
+
+            if (major == 0) return Unit(minor, minorUnit);
+            if (minor == 0) return Unit(major, majorUnit);
+            return $"{Unit(major, majorUnit)} {Unit(minor, minorUnit)}";
+        }
+
         /// <summary>
         /// Returns true if the entity's tiredness attribute marks them as sleeping.
         /// </summary>
@@ -366,6 +473,7 @@ namespace SimpleBedSpawn
 
             mountListenersByPlayerUid.Clear();
             bedPosByPlayerUid.Clear();
+            lastSpawnSetByPlayerUid.Clear();
             base.Dispose();
         }
 
