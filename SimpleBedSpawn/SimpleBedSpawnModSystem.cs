@@ -246,6 +246,17 @@ namespace SimpleBedSpawn
                 return;
             }
 
+            if (!config.AllowSharedBeds && IsBedOwnedByOther(bedPos, player.PlayerUID))
+            {
+                if (config.VerboseLogging)
+                {
+                    sapi?.Logger.Notification("[SimpleBedSpawn] {0} slept in a bed owned by another player, spawn not set.",
+                    player.PlayerName);
+                }
+                SendBedTakenMessage(player);
+                return;
+            }
+
             if (config.VerboseLogging)
             {
                 sapi?.Logger.Notification("[SimpleBedSpawn] {0}'s spawn set at ({1}, {2}, {3}).",
@@ -288,6 +299,18 @@ namespace SimpleBedSpawn
             return false;
         }
 
+        /// <summary>
+        /// Returns true if another player already has their spawn set on the bed at this position.
+        /// </summary>
+        private bool IsBedOwnedByOther(BlockPos bedPos, string playerUid)
+        {
+            foreach (var pair in bedPosByPlayerUid)
+            {
+                if (pair.Key != playerUid && pair.Value.Equals(bedPos)) return true;
+            }
+            return false;
+        }
+
         private void SendSpawnSetMessage(IServerPlayer player)
         {
             if (config.Messages.ShowSpawnSetMessage)
@@ -304,6 +327,12 @@ namespace SimpleBedSpawn
         {
             if (config.Messages.ShowBedNotAllowedMessage)
                 player.SendIngameError("bedspawn-notallowed", config.Messages.BedNotAllowedMessage);
+        }
+
+        private void SendBedTakenMessage(IServerPlayer player)
+        {
+            if (config.Messages.ShowBedTakenMessage)
+                player.SendIngameError("bedspawn-taken", config.Messages.BedTakenMessage);
         }
 
         /// <summary>
