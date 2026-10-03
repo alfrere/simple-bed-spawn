@@ -147,15 +147,21 @@ namespace SimpleBedSpawn
             if (data == null) return;
 
             var saved = SerializerUtil.Deserialize<BedSaveData>(data);
-            if (saved?.Beds == null) return;
+            if (saved == null) return;
+
+            pendingSpawnResets = new HashSet<string>(saved.PendingResets ?? new List<string>());
 
             bedPosByPlayerUid.Clear();
-            foreach (var beds in saved.Beds)
-                bedPosByPlayerUid[beds.Key] = new BlockPos(beds.Value[0], beds.Value[1], beds.Value[2]);
+            if (saved.Beds != null)
+            {
+                foreach (var beds in saved.Beds)
+                    bedPosByPlayerUid[beds.Key] = new BlockPos(beds.Value[0], beds.Value[1], beds.Value[2]);
+            }
 
             if (config.VerboseLogging)
             {
-                sapi?.Logger.Notification("[SimpleBedSpawn] Loaded {0} bed position(s).", bedPosByPlayerUid.Count);
+                sapi?.Logger.Notification("[SimpleBedSpawn] Loaded {0} bed position(s), {1} pending reset(s).",
+                bedPosByPlayerUid.Count, pendingSpawnResets.Count);
             }
         }
 
@@ -164,6 +170,7 @@ namespace SimpleBedSpawn
             var data = new BedSaveData();
             foreach (var bedPos in bedPosByPlayerUid)
                 data.Beds[bedPos.Key] = new[] { bedPos.Value.X, bedPos.Value.Y, bedPos.Value.Z };
+            data.PendingResets.AddRange(pendingSpawnResets);
 
             sapi?.WorldManager.SaveGame.StoreData(SaveKey, SerializerUtil.Serialize(data));
 
@@ -230,13 +237,16 @@ namespace SimpleBedSpawn
                     toRemove.Add(pair.Key);
 
                     IServerPlayer? bedOwner = sapi?.World.PlayerByUid(pair.Key) as IServerPlayer;
-                    if (bedOwner != null)
+                    // PlayerByUid also returns offline players, so check the connection state instead
+                    if (bedOwner?.ConnectionState == EnumClientState.Playing)
                     {
                         bedOwner.SetSpawnPosition(null);
                         SendSpawnLostMessage(bedOwner);
                     }
                     else
                     {
+                        // Reset now if the player data is available, and queue it so the message is shown on login
+                        bedOwner?.SetSpawnPosition(null);
                         pendingSpawnResets.Add(pair.Key);
                     }
 
@@ -473,6 +483,7 @@ namespace SimpleBedSpawn
 
             mountListenersByPlayerUid.Clear();
             bedPosByPlayerUid.Clear();
+            pendingSpawnResets.Clear();
             lastSpawnSetByPlayerUid.Clear();
             base.Dispose();
         }
