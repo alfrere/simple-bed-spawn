@@ -1,3 +1,7 @@
+### 🛏️ Unreleased
+
+- Fixed the "bed destroyed" message not being shown to bed owners who were offline when their bed was destroyed, and pending spawn resets being lost on server restart (#2)
+
 ### 🛏️ v1.4.0
 
 - Fixed spawn point not being reset when a bed is destroyed by explosions, world edits or other mods, not just by a player (#1)
